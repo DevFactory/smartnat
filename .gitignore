@@ -1,0 +1,12 @@
+.idea/
+.vscode/
+bin/
+vendor/
+cmd/test/
+debug.test
+debug
+coverage.out
+cover.out
+cover.html
+smart-nat-controller
+main

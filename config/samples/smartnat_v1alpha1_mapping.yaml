@@ -1,0 +1,30 @@
+apiVersion: smartnat.aureacentral.com/v1alpha1
+kind: Mapping
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: mapping-sample
+spec:
+  # can be assigned to multiple nodes
+  addresses:
+  - "192.168.3.1"
+  - "192.168.3.11"
+  allowedSources:
+  - "10.0.0.0/8"
+  - "192.168.5.1"
+  # must be in the same namespace
+  serviceName: "myService"
+  # through "service" translation is default, "direct" might be implemented later
+  mode: "service"
+  ports:
+  # translates to the same port, so from 8080 to 8080 TCP in Service (TCP is default)
+  - port: 8080    
+  # translates to different port, from 9999 to 53 UDP in Service
+  - port: 9999
+    protocol: "UDP"
+    servicePort: 53
+  # planned feature: dynamic ports; assignes port dynamically and translates to
+  # Service TCP 80
+  - protocol: "TCP"
+    servicePort: 80
+

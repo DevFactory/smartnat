@@ -1,0 +1,19 @@
+apiVersion: smartnat.aureacentral.com/v1alpha1
+kind: Mapping
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: mapping-sample
+spec:
+  # can be assigned to multiple nodes
+  addresses:
+  - "172.17.0.1"
+  allowedSources:
+  - "0.0.0.0/0"
+  # must be in the same namespace
+  serviceName: "echo-test-service"
+  # through "service" translation is default, "direct" might be implemented later
+  mode: "service"
+  ports:
+  # translates to the same port, so from 8080 to 8080 TCP in Service (TCP is default)
+  - port: 8080    
