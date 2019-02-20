@@ -11,7 +11,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:57fdd34760867edae32111d11ed2329f7b05ab7e2744f28349cddee383c3fa32"
+  digest = "1:89125ab08548b2e5f35fdde90e4bc8a5ffa268c6a2491301b57100eec9ade7f5"
   name = "github.com/DevFactory/go-tools"
   packages = [
     "pkg/extensions/collections",
@@ -26,7 +26,7 @@
     "pkg/nettools/testhelpers",
   ]
   pruneopts = "T"
-  revision = "454dd553ad564773399338072f8c187dc98d3074"
+  revision = "64a2990784658d113cdccb0e1f3455a0c0dcb1d1"
 
 [[projects]]
   branch = "master"
