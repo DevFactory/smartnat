@@ -4,6 +4,7 @@
 
 SmartNat is a Kubernetes controller which exposes services using IP/TCP/UDP directly. It targets limitations that arise when you’re trying to use NodePort, LoadBalancer or Ingress for non-HTTP services. A single $10 Linux instance can expose hundreds of Services and with two of them you can already be Highly Available.
 SmartNat is configured using [CRDs](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) and implemented with [kubebuilder](https://book.kubebuilder.io/). It can run in HA mode and offers features like basic traffic filtering and port translation.
+Internally, SmartNat uses a lot of linux networking utilities like `ip route`, `ip addr`, `ip rule`, `iptables` and `ipset`. To easily execute and handle them, it heavily uses our [https://github.com/DevFactory/go-tools](https://github.com/DevFactory/go-tools) library.
 
 # How does it work
 SmartNat interconnects two networks: an internal network of a kubernetes cluster and an external network, where it has a set of static IP addresses assigned. Then, it can map any TCP/UDP traffic coming to one of the external IP addresses and ports to a virtual in-cluster IP address associated with one of your [kubernetes services](https://kubernetes.io/docs/concepts/services-networking/service/). That way you can expose multiple kubernetes services for each of the external IPs your node has configured. This is significantly cheaper than creating LoadBalancer for each of your Services and much more scalable than using NodePort.
