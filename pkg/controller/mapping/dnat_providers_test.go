@@ -107,7 +107,7 @@ func Test_throughServiceDNATProvider_SetupDNAT(t *testing.T) {
 		{
 			name: "tcp only, no existing rules",
 			ports: []v1alpha1.MappingPort{
-				v1alpha1.MappingPort{
+				{
 					Port:        c.dport,
 					Protocol:    protoTcp,
 					ServicePort: c.servicePort,
@@ -128,12 +128,12 @@ func Test_throughServiceDNATProvider_SetupDNAT(t *testing.T) {
 		{
 			name: "tcp and udp, some existing rules",
 			ports: []v1alpha1.MappingPort{
-				v1alpha1.MappingPort{
+				{
 					Port:        c.dport,
 					Protocol:    protoTcp,
 					ServicePort: c.servicePort,
 				},
-				v1alpha1.MappingPort{
+				{
 					Port:        c.dport,
 					Protocol:    protoUdp,
 					ServicePort: c.servicePort,
@@ -181,7 +181,7 @@ func Test_throughServiceDNATProvider_DeleteDNAT(t *testing.T) {
 		{
 			name: "tcp only",
 			ports: []v1alpha1.MappingPort{
-				v1alpha1.MappingPort{
+				{
 					Port:        c.dport,
 					Protocol:    protoTcp,
 					ServicePort: c.servicePort,
@@ -191,12 +191,12 @@ func Test_throughServiceDNATProvider_DeleteDNAT(t *testing.T) {
 		{
 			name: "tcp and udp",
 			ports: []v1alpha1.MappingPort{
-				v1alpha1.MappingPort{
+				{
 					Port:        c.dport,
 					Protocol:    protoTcp,
 					ServicePort: c.servicePort,
 				},
-				v1alpha1.MappingPort{
+				{
 					Port:        c.dport,
 					Protocol:    protoUdp,
 					ServicePort: c.servicePort,

@@ -19,6 +19,7 @@ import (
 	"github.com/DevFactory/smartnat/pkg/config"
 )
 
+// GetTestConfig return a Config prepared for tests
 func GetTestConfig(t *testing.T) *config.Config {
 	cfg, err := config.NewConfigFromArgs("eth[0-9]+", true, false, "eth0", 10, true, 10, 60, 1)
 	if err != nil {

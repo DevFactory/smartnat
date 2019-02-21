@@ -37,7 +37,7 @@ func TestStorageMapping(t *testing.T) {
 			AllowedSources: []string{},
 			Mode:           "service",
 			Ports: []MappingPort{
-				MappingPort{
+				{
 					Port:        1000,
 					ServicePort: 1000,
 					Protocol:    "tcp",

@@ -42,16 +42,16 @@ func Test_scrubber_ScrubMapping(t *testing.T) {
 				"10.0.0.1/16",
 			},
 			Ports: []v1alpha1.MappingPort{
-				v1alpha1.MappingPort{
+				{
 					Port:        8080,
 					ServicePort: 8090,
 					Protocol:    "UDP",
 				},
-				v1alpha1.MappingPort{
+				{
 					Port:     8080,
 					Protocol: "TCP",
 				},
-				v1alpha1.MappingPort{
+				{
 					Port: 8090,
 				},
 			},
@@ -111,7 +111,7 @@ func Test_scrubber_ScrubMapping(t *testing.T) {
 		"192.168.3.1",
 	}
 	wrongReusedPortOther.Spec.Ports = []v1alpha1.MappingPort{
-		v1alpha1.MappingPort{
+		{
 			Port:        8080,
 			ServicePort: 8090,
 			Protocol:    "udp",
@@ -120,7 +120,7 @@ func Test_scrubber_ScrubMapping(t *testing.T) {
 	// wrong - uses to many ports per protocol
 	wrongTooManyTcpPorts := valid1.DeepCopy()
 	wrongTooManyUdpPorts := valid1.DeepCopy()
-	var i int32 = 0
+	var i int32
 	for i = 0; i < mapping.MaxPortsPerProtocol+1; i++ {
 		wrongTooManyTcpPorts.Spec.Ports = append(wrongTooManyTcpPorts.Spec.Ports, v1alpha1.MappingPort{
 			Port:        i + 2000,
@@ -276,9 +276,9 @@ func Test_scrubber_ValidateEndpoints(t *testing.T) {
 			name: "valid one Subset",
 			endpoints: &v1.Endpoints{
 				Subsets: []v1.EndpointSubset{
-					v1.EndpointSubset{
+					{
 						Addresses: []v1.EndpointAddress{
-							v1.EndpointAddress{
+							{
 								Hostname: "test",
 								IP:       "127.0.0.1",
 							},
@@ -292,17 +292,17 @@ func Test_scrubber_ValidateEndpoints(t *testing.T) {
 			name: "invalid two Subsets",
 			endpoints: &v1.Endpoints{
 				Subsets: []v1.EndpointSubset{
-					v1.EndpointSubset{
+					{
 						Addresses: []v1.EndpointAddress{
-							v1.EndpointAddress{
+							{
 								Hostname: "test",
 								IP:       "127.0.0.1",
 							},
 						},
 					},
-					v1.EndpointSubset{
+					{
 						Addresses: []v1.EndpointAddress{
-							v1.EndpointAddress{
+							{
 								Hostname: "test",
 								IP:       "127.0.0.1",
 							},

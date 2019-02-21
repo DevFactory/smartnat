@@ -141,14 +141,14 @@ func setupRouteEntries(routeHelper nettools.IPRouteHelper, iface nettools.Interf
 	}
 	logrus.Debugf("Detected gateway address: %s", gwIP.String())
 	routeEntries := []nt.IPRouteEntry{
-		nt.IPRouteEntry{
+		{
 			TableName:    iface.GetName(),
 			TargetPrefix: localSubnet.String(),
 			Mode:         "dev",
 			Gateway:      iface.GetName(),
 			Options:      "scope link",
 		},
-		nt.IPRouteEntry{
+		{
 			TableName:    iface.GetName(),
 			TargetPrefix: "default",
 			Mode:         "via",

@@ -212,7 +212,7 @@ func (s *LinuxSyncer) SyncMapping(mapping *v1alpha1.Mapping, svc *v1.Service, ep
 	}
 
 	// update Mapping.Status
-	changed := false
+	var changed bool
 	if changed, err = s.updateMappingStatus(localExternalIP, mapping, svc, eps); err != nil {
 		logrusWithMapping(mapping).Errorf("Error updating Mapping's Status: %v", err)
 		return changed, err
