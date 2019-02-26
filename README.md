@@ -1,6 +1,7 @@
 # Intro
 [![GoDoc](https://godoc.org/github.com/DevFactory/smartnat?status.svg)](https://godoc.org/github.com/DevFactory/smartnat)
 [![Go Report Card](https://goreportcard.com/badge/github.com/DevFactory/smartnat)](https://goreportcard.com/report/github.com/DevFactory/smartnat)
+[![Build Status](https://travis-ci.com/DevFactory/smartnat.svg?branch=master)](https://travis-ci.com/DevFactory/smartnat)
 
 SmartNat is a Kubernetes controller which exposes services using IP/TCP/UDP directly. It targets limitations that arise when you’re trying to use NodePort, LoadBalancer or Ingress for non-HTTP services. A single $10 Linux instance can expose hundreds of Services and with two of them you can already be Highly Available.
 SmartNat is configured using [CRDs](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) and implemented with [kubebuilder](https://book.kubebuilder.io/). It can run in HA mode and offers features like basic traffic filtering and port translation.

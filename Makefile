@@ -26,10 +26,13 @@ testci: generate fmt vet manifests
 	SNCTRLR_IPTABLES_TIMEOUT_SEC=10 \
 	SNCTRLR_AUTOREFRESH_PERIOD_SEC=10 \
 	SNCTRLR_MAX_FINALIZE_WAIT_MINUTES=60 \
-	go test -v -cover -coverprofile=cover.out ./pkg/... ./cmd/... 2>&1 | go-junit-report > report.xml
+	go test -v -coverprofile=cover.out ./...
 
 # Build manager binary
 manager: generate fmt vet
+	go build -ldflags "-X main.version=`git describe`" -o bin/smartnat-manager github.com/DevFactory/smartnat/cmd/manager
+
+managerci:
 	go build -ldflags "-X main.version=`git describe`" -o bin/smartnat-manager github.com/DevFactory/smartnat/cmd/manager
 
 # Run against the configured Kubernetes cluster in ~/.kube/config

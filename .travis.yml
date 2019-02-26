@@ -17,9 +17,12 @@ before_install:
   - curl -L -O "https://github.com/goreleaser/goreleaser/releases/download/v${gr_version}/goreleaser_Linux_x86_64.tar.gz"
   - tar -zxvf goreleaser_Linux_x86_64.tar.gz
   - mv goreleaser $GOPATH/bin/
+  - go get github.com/mattn/goveralls
 
 install:
   - dep ensure -v --vendor-only
 
 script:
-  - make
+  - make testci
+  - $GOPATH/bin/goveralls -coverprofile=cover.out -service=travis-ci
+  - make managerci
