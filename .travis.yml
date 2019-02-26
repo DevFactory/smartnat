@@ -1,3 +1,5 @@
+dist: xenial
+
 language: go
 
 go:  
@@ -11,7 +13,7 @@ before_install:
   - chmod +x $GOPATH/bin/dep
   - curl -L -O "https://github.com/kubernetes-sigs/kubebuilder/releases/download/v${kb_version}/kubebuilder_${kb_version}_linux_amd64.tar.gz"
   - tar -zxvf kubebuilder_${kb_version}_linux_amd64.tar.gz
-  - mv kubebuilder_${kb_version}_linux_amd64 kubebuilder && mv kubebuilder /usr/local/
+  - mv kubebuilder_${kb_version}_linux_amd64 kubebuilder && sudo mv kubebuilder /usr/local/
   - curl -L -O "https://github.com/goreleaser/goreleaser/releases/download/v${gr_version}/goreleaser_Linux_x86_64.tar.gz"
   - tar -zxvf goreleaser_Linux_x86_64.tar.gz
   - mv goreleaser $GOPATH/bin/
