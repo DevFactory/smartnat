@@ -1,6 +1,7 @@
 .idea/
 .vscode/
 bin/
+dist/
 vendor/
 cmd/test/
 debug.test

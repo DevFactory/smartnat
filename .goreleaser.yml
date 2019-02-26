@@ -1,0 +1,22 @@
+builds:
+- env:
+  - CGO_ENABLED=0
+  main: ./cmd/manager/main.go
+  ldflags:
+  - X main.version=`git describe`
+  goos:
+  - linux
+  hooks:
+    pre: make generate fmt vet manifests
+archive:
+  wrap_in_directory: false
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{ .Tag }}-next"
+changelog:
+  sort: asc
+  filters:
+    exclude:
+    - '^docs:'
+    - '^test:'
