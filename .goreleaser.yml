@@ -5,12 +5,12 @@ builds:
   main: ./cmd/manager/main.go
   goos:
   - linux
-  files:
-    - deployment/**
-    - config/crds/*
-    - config/rbac/*
 archive:
   wrap_in_directory: false
+  files:
+    - deployment/**/*
+    - config/crds/*
+    - config/rbac/*
 checksum:
   name_template: 'checksums.txt'
 snapshot:
