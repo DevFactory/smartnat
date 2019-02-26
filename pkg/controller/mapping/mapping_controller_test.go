@@ -39,7 +39,7 @@ const timeout = time.Second * 5
 func setupReconcilerWithMocks(t *testing.T, mgr manager.Manager) reconcile.Reconciler {
 	deps := getReconcilerDependencies(t)
 	return newReconciler(mgr, deps.config, deps.ifaceProvider, deps.ipRouteSmartNatHelper, deps.mappingSyncer,
-		deps.scrubber)
+		deps.scrubber, deps.heartbeatChan)
 }
 
 func TestReconcile(t *testing.T) {

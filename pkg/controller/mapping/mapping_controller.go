@@ -51,7 +51,7 @@ type ipsConfig struct {
 
 // Add creates a new Mapping Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager) error {
+func Add(mgr manager.Manager, heartbeatChan chan<- string) error {
 	// here we are configuring all the dependencies required by the actual syncer object
 	cfg, err := config.NewConfig()
 	if err != nil {
@@ -80,12 +80,13 @@ func Add(mgr manager.Manager) error {
 	ipsetHelper := nettools.NewExecIPSetHelper(executor)
 	syncer := NewSyncer(namer, interfaceProvider, ipRouteHelper, conntrackHelper, ipTablesHelper, ipsetHelper,
 		cfg.SetupSNAT, cfg.SetupMasquerade)
-	return add(mgr, newReconciler(mgr, cfg, interfaceProvider, ipRouteHelper, syncer, scrubber))
+	return add(mgr, newReconciler(mgr, cfg, interfaceProvider, ipRouteHelper, syncer, scrubber, heartbeatChan))
 }
 
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager, cfg *config.Config, interfaceProvider nettools.InterfaceProvider,
-	ipRouteHelper IPRouteSmartNatHelper, syncer Syncer, scrubber Scrubber) reconcile.Reconciler {
+	ipRouteHelper IPRouteSmartNatHelper, syncer Syncer, scrubber Scrubber,
+	heartbeatChan chan<- string) reconcile.Reconciler {
 	client := mgr.GetClient()
 
 	return &ReconcileMapping{
@@ -96,6 +97,7 @@ func newReconciler(mgr manager.Manager, cfg *config.Config, interfaceProvider ne
 		routeHelper:   ipRouteHelper,
 		syncer:        syncer,
 		scrubber:      scrubber,
+		heartbeatChan: heartbeatChan,
 	}
 }
 
@@ -180,6 +182,7 @@ type ReconcileMapping struct {
 	routeHelper   IPRouteSmartNatHelper
 	syncer        Syncer
 	scrubber      Scrubber
+	heartbeatChan chan<- string
 }
 
 var (
@@ -194,6 +197,9 @@ var (
 // +kubebuilder:rbac:groups=apps,resources=services;endpoints,verbs=get;list;watch
 // +kubebuilder:rbac:groups=smartnat.aureacentral.com,resources=mappings,verbs=get;list;watch;create;update;patch;delete
 func (r *ReconcileMapping) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+	// update heartbeat channel
+	r.heartbeatChan <- fmt.Sprintf(GetHeartbeatString())
+
 	// Fetch the Mapping instance
 	instance, fetchResult, err := r.fetchMapping(request.NamespacedName)
 	if err != nil || fetchResult != nil {
@@ -614,4 +620,8 @@ func (r *ReconcileMapping) checkSetupFinalizer(mapping *smartnatv1alpha1.Mapping
 	}
 
 	return false, false, nil
+}
+
+func GetHeartbeatString() string {
+	return fmt.Sprintf("OK %v", time.Now().UTC().Format(time.RFC3339))
 }

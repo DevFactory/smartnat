@@ -37,6 +37,7 @@ type reconcilerDependencies struct {
 	ipRouteSmartNatHelperUpdateChan   chan time.Time
 	mappingSyncer                     Syncer
 	scrubber                          Scrubber
+	heartbeatChan                     chan string
 }
 
 func getReconcilerDependencies(t *testing.T) *reconcilerDependencies {
@@ -51,8 +52,9 @@ func getReconcilerDependencies(t *testing.T) *reconcilerDependencies {
 	expectedInterfaces := ntmocks.MockInterfacesEth
 	expectedExecInfo := netoolsth.GetExecInfosForIPRouteInterfaceInit(expectedInterfaces)
 	execMock := cmdmock.NewMockExecutorFromInfos(t, expectedExecInfo...)
-	ioOp := netoolsth.GetMockIOOpProviderWithEmptyRTTablesFile([]byte{}, len(expectedInterfaces))
+	ioOp := netoolsth.GetMockIOOpProviderWithEmptyRTTablesFile([]byte{}, len(expectedInterfaces), true)
 	routeUpdateChan := make(chan time.Time)
+	heartbeatChan := make(chan string)
 	ipRouteHelper := &ntmocks.IPRouteHelper{}
 	ipRouteSmartNatHelper := NewChanIPRouteSmartNatHelper(ipRouteHelper, ifaceProvider, routeUpdateChan, false, 1)
 
@@ -67,5 +69,6 @@ func getReconcilerDependencies(t *testing.T) *reconcilerDependencies {
 		ipRouteSmartNatHelperUpdateChan:   routeUpdateChan,
 		scrubber:                          NewScrubber(ifaceProvider),
 		mappingSyncer:                     &mocks.Syncer{},
+		heartbeatChan:                     heartbeatChan,
 	}
 }

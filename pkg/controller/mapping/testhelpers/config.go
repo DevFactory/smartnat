@@ -19,9 +19,8 @@ import (
 	"github.com/DevFactory/smartnat/pkg/config"
 )
 
-// GetTestConfig return a Config prepared for tests
 func GetTestConfig(t *testing.T) *config.Config {
-	cfg, err := config.NewConfigFromArgs("eth[0-9]+", true, false, "eth0", 10, true, 10, 60, 1)
+	cfg, err := config.NewConfigFromArgs("eth[0-9]+", true, false, "eth0", 10, true, 10, 60, 1, 8080)
 	if err != nil {
 		t.Logf("Cannot create configuration object: %v", err)
 		t.Fail()

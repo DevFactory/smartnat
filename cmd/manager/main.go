@@ -14,12 +14,15 @@ limitations under the License. */
 package main
 
 import (
+	"fmt"
+	"net/http"
 	"os"
 	"runtime"
 
 	"github.com/DevFactory/smartnat/pkg/apis"
 	mgrconfig "github.com/DevFactory/smartnat/pkg/config"
 	"github.com/DevFactory/smartnat/pkg/controller"
+	"github.com/DevFactory/smartnat/pkg/controller/mapping"
 	"github.com/DevFactory/smartnat/pkg/webhook"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -30,6 +33,7 @@ import (
 )
 
 var version string
+var heartbeat string = mapping.GetHeartbeatString()
 
 func printVersion() {
 	log.Infof("Go Version: %s", runtime.Version())
@@ -81,7 +85,8 @@ func main() {
 
 	// Setup all Controllers
 	log.Info("Setting up controllers")
-	if err := controller.AddToManager(mgr); err != nil {
+	heartbeatChan := make(chan string)
+	if err := controller.AddToManager(mgr, heartbeatChan); err != nil {
 		log.Error(err, "unable to register controllers to the manager")
 		os.Exit(1)
 	}
@@ -92,6 +97,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	// healthchecks
+	log.Info("setting up health check")
+	go func() {
+		for {
+			heartbeat = <-heartbeatChan
+		}
+	}()
+	http.HandleFunc("/healthcheck", handleHealthcheck)
+	go func() {
+		http.ListenAndServe(fmt.Sprintf(":%d", mgrCfg.MonPort), nil)
+	}()
+
 	// Start the Cmd
 	// TODO: run cleanup on shutdown
 	log.Info("Starting the Cmd.")
@@ -99,4 +116,8 @@ func main() {
 		log.Error(err, "unable to run the manager")
 		os.Exit(1)
 	}
+}
+
+func handleHealthcheck(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte(heartbeat))
 }

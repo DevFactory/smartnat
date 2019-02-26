@@ -32,6 +32,7 @@ type Config struct {
 	InterfaceAutorefreshPeriodSec int
 	MaxFinalizeWaitMinutes        int
 	GwAddressOffset               int32
+	MonPort                       int
 }
 
 const (
@@ -76,6 +77,8 @@ const (
 	// A negative offset is counted backwards from the broadcast address (so, if the IP is "10.10.10.10/24"
 	// and the offset is -1, the assumed gateway IP on this interface is "10.10.10.254").
 	snctrlrGwAddressOffset = "SNCTRLR_GW_ADDRESS_OFFSET"
+	// snctrlrMonitorPort configures TCP port for exposing HTTP healthcheck and performance metrics
+	snctrlrMonitorPort = "SNCTRLR_MONITOR_PORT"
 )
 
 // NewConfig returns new configuration settings for smart-nat-controller
@@ -88,7 +91,7 @@ func NewConfig() (*Config, error) {
 // NewConfigFromArgs creates new config struct from arguments, after running validation
 func NewConfigFromArgs(interfaceNamePattern string, setupMasquerade, setupSNAT bool, defaultGWInterface string,
 	ipTablesTimeoutSec int, enableDebug bool, interfaceAutorefreshPeriodSec, maxFinalizeWaitMinutes int,
-	gwAddressOffset int32) (*Config, error) {
+	gwAddressOffset int32, monitorPort int) (*Config, error) {
 	cfg := &Config{
 		DefaultGWInterface:            defaultGWInterface,
 		EnableDebug:                   enableDebug,
@@ -99,6 +102,7 @@ func NewConfigFromArgs(interfaceNamePattern string, setupMasquerade, setupSNAT b
 		SetupSNAT:                     setupSNAT,
 		MaxFinalizeWaitMinutes:        maxFinalizeWaitMinutes,
 		GwAddressOffset:               gwAddressOffset,
+		MonPort:                       monitorPort,
 	}
 	err := cfg.validate()
 	return cfg, err
@@ -116,6 +120,7 @@ func (cfg *Config) load() error {
 	cfg.MaxFinalizeWaitMinutes, _ = eos.GetIntFromEnvVarWithDefault(snctrlrMaxFinalizeWaitMinutes, 60)
 	offset, _ := eos.GetIntFromEnvVarWithDefault(snctrlrGwAddressOffset, 1)
 	cfg.GwAddressOffset = int32(offset)
+	cfg.MonPort, _ = eos.GetIntFromEnvVarWithDefault(snctrlrMonitorPort, 8080)
 	return cfg.validate()
 }
 
@@ -137,6 +142,9 @@ func (cfg *Config) validate() error {
 	}
 	if cfg.MaxFinalizeWaitMinutes <= 0 {
 		return fmt.Errorf("Configuration env var %s can't be <= 0", snctrlrMaxFinalizeWaitMinutes)
+	}
+	if cfg.MonPort <= 0 || cfg.MonPort > 65535 {
+		return fmt.Errorf("Configuration env var %s must be a valid TCP port num (1-65535)", snctrlrMonitorPort)
 	}
 	return nil
 }
