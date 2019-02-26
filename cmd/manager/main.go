@@ -32,13 +32,17 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var version string
-var heartbeat string = mapping.GetHeartbeatString()
+var (
+	version   string = "v2.0.0-dev"
+	commit    string = "none"
+	date      string = "unknown"
+	heartbeat string = mapping.GetHeartbeatString()
+)
 
 func printVersion() {
 	log.Infof("Go Version: %s", runtime.Version())
 	log.Infof("Go OS/Arch: %s/%s", runtime.GOOS, runtime.GOARCH)
-	log.Infof("smart-nat-manager version: %v", version)
+	log.Infof("smart-nat-manager version: %s, commit: %s, build date: %s", version, commit, date)
 }
 
 func main() {

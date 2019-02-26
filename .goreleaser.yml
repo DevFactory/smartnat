@@ -1,13 +1,10 @@
 builds:
 - env:
   - CGO_ENABLED=0
+  - VER=`git describe`
   main: ./cmd/manager/main.go
-  ldflags:
-  - X main.version=`git describe`
   goos:
   - linux
-  hooks:
-    pre: make generate fmt vet manifests
 archive:
   wrap_in_directory: false
 checksum:

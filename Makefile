@@ -29,11 +29,10 @@ testci: generate fmt vet manifests
 	go test -v -coverprofile=cover.out ./...
 
 # Build manager binary
-manager: generate fmt vet
-	go build -ldflags "-X main.version=`git describe`" -o bin/smartnat-manager github.com/DevFactory/smartnat/cmd/manager
+manager: generate fmt vet managerci
 
 managerci:
-	go build -ldflags "-X main.version=`git describe`" -o bin/smartnat-manager github.com/DevFactory/smartnat/cmd/manager
+	go build -ldflags "-X main.version=`git describe` -X main.commit=`git rev-parse HEAD` -X main.date=`date '+%FT%T%:z'`" -o bin/smartnat-manager github.com/DevFactory/smartnat/cmd/manager
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate fmt vet
