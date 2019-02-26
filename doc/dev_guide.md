@@ -3,6 +3,7 @@
 ## On your local machine
 1. Make sure you have golang 1.10 [installed](https://golang.org/doc/install#download)
 1. Make sure you have `dep` [installed](https://github.com/golang/dep)
+1. Make sure you have `kubebuilder` [installed](https://book.kubebuilder.io/getting_started/installation_and_setup.html) (currently only required to run some of the tests)
 1. Clone this repository into `$GOPATH/src/github.com/DevFactory/smartnat`
 1. Run `dep`
   ```
