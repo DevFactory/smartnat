@@ -26,3 +26,8 @@ Now, you can start a ready container that has all the dependecies, code and vim 
 ```
 docker run -it --name smartnat-dev smartnat_devenv:latest
 ```
+
+Everything should be in place and you should be able to run all tests:
+```
+go test ./...
+```
