@@ -1,0 +1,43 @@
+{
+  "variables": {
+      "aws_region": "us-east-1"
+  },
+
+  "builders": [{
+    "type": "amazon-ebs",
+    "region": "{{user `aws_region`}}",
+    "vpc_id": "FILL_IN",
+    "subnet_id": "FILL_IN",
+    "security_group_ids": ["FILL_IN"],
+    "source_ami": "{{user `source_ami_id`}}",
+    "source_ami_filter": {
+        "filters": {
+            "architecture": "x86_64",
+            "name": "amzn2-ami-minimal-hvm-*",
+            "root-device-type": "ebs",
+            "state": "available",
+            "virtualization-type": "hvm"
+        },
+        "owners": ["137112412989"],
+        "most_recent": true
+    },
+    "instance_type": "m4.large",
+    "launch_block_device_mappings": [{
+        "device_name": "/dev/xvda",
+        "volume_type": "gp2",
+        "volume_size": 20,
+        "delete_on_termination": true
+    }],
+    "ssh_username": "ec2-user",
+    "ami_name": "FILL_IN",
+    "ami_description": "FILL_IN",
+    "ami_users": ["FILL_IN"],
+    "iam_instance_profile": "FILL_IN"
+  }],
+
+  "provisioners": [{
+    "type": "shell",
+    "script": "install-smart-nat.sh",
+    "environment_vars": ["SN_VER=2.0.1", "KUBE_VER=1.11.5"]
+  }]
+}
