@@ -60,14 +60,21 @@ In general, there are 2 main deployment scenarios possible:
 
 Right now, only the solution 1. above is described here, as we believe it's a better fit. As for solution 2., you probably shouldn't run any other pods than Smartnat on that node anyway. This means, that you will have a cluster node, that actually can't schedule your workloads - so there's not much sense in creating it that way. Also, `kubelet` and `docker` daemons will require some resources, so without them you can probably use smaller instance. And we reduce attack surface of an instance, that will be facing client's traffic.
 
-# Creating your SmartNat instance step-by-step
+# Creating your SmartNat instance
 
 ## 1. Preparing the networking
 Boot your instance and setup networking as [described above](#network-interfaces-requirements). This part depends heavily on your network architecture and used distribution. Just make sure everything works as described above, that traffic forwarding is enabled and there's no embedded firewall that can block traffic between external and cluster interfaces.
 
 ## 2. Installing and running necessary services
 
-### 2.1. Kube-proxy
+### 2.1. Scripted installation
+We provide [install-smart-nat.sh](packer/install-smart-nat.sh) script that can be used to install all the required binaries and service files into your systemd based distribution. You can also use this script with [packer](https://packer.io/) to easily build your virtual machine image. If you use AWS, you can check our [packer template](packer/packer.json) to build the Smartnat with packer on AWS on top the most recent Amazon Linux 2 distribution.
+
+Alternatively, you can find detailed step-by-step instructions below.
+
+### 2.2. Step-by-step manual installation
+
+#### 2.2.1. Kube-proxy
 Your node has to run `kube-proxy` service that is version compatible with your cluster - you can download it here for different releases: [https://storage.googleapis.com/kubernetes-release/release/v1.X.Y/bin/linux/amd64/kube-proxy](https://storage.googleapis.com/kubernetes-release/release/v1.X.Y/bin/linux/amd64/kube-proxy). The important part here is that it needs to correctly connect, authenticate and authorize with your API server (if only you have RBAC enabled). For this, you have to create a valid kubeconfig file and place it under `/etc/kubeconfig` path. Make sure `kube-proxy` authenticates as `system:kube-proxy` user. Your `kube-proxy` must run in ["IPVS" mode](https://kubernetes.io/docs/concepts/services-networking/service/#proxy-mode-ipvs). Now, start `kube-proxy` with this command
 ```
 kube-proxy \
@@ -86,10 +93,10 @@ sudo systemctl restart kube-proxy
 
 Check your `kube-proxy` status with `systemctl status kube-proxy` and logs with `journalctl -u kube-proxy`.
 
-### 2.2. Smartnat binary
+#### 2.2.2. Smartnat binary
 When `kube-proxy` is up and running, it's time to deploy `smartnat-manager` binary in a very similar manner. Download the binary from the [release page](https://github.com/DevFactory/smartnat/releases) and place in `/usr/local/bin/smartnat-manager`. Get [smartnat.service](../deployment/smartnat/smartnat.service) systemd unit file and copy it into `/etc/systemd/system`. Next, configure the `Environment` entries in the file to configure `smartnat-manager`. Options are explained below.
 
-### 2.3. Smartnat configuration
+#### 2.2.3. Smartnat configuration
 The manager can be configured using the following environment variables:
 * "SNCTRLR_DEBUG_ENABLED" - set to `true` to enable debug messages in log.
 * "SNCTRLR_DEFAULT_GW_INTERFACE" - the name of default gateway interface, as explained [above](#network-interfaces-requirements). Example: `eth0`.
