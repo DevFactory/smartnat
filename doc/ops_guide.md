@@ -96,7 +96,7 @@ Check your `kube-proxy` status with `systemctl status kube-proxy` and logs with 
 #### 2.2.2. Smartnat binary
 When `kube-proxy` is up and running, it's time to deploy `smartnat-manager` binary in a very similar manner. Download the binary from the [release page](https://github.com/DevFactory/smartnat/releases) and place in `/usr/local/bin/smartnat-manager`. Get [smartnat.service](../deployment/smartnat/smartnat.service) systemd unit file and copy it into `/etc/systemd/system`. Next, configure the `Environment` entries in the file to configure `smartnat-manager`. Options are explained below.
 
-#### 2.2.3. Smartnat configuration
+### 2.3. Smartnat configuration
 The manager can be configured using the following environment variables:
 * "SNCTRLR_DEBUG_ENABLED" - set to `true` to enable debug messages in log.
 * "SNCTRLR_DEFAULT_GW_INTERFACE" - the name of default gateway interface, as explained [above](#network-interfaces-requirements). Example: `eth0`.
