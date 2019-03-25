@@ -150,7 +150,7 @@ func (p *ThroughServiceDNAT) synchronizeJumpPerProtocol(mapping *v1alpha1.Mappin
 			fromChain, protocol)
 		if err := p.setupJumpPerProtocol(externalIP, protocol, ports, toChain, mapping); err != nil {
 			logrusWithMapping(mapping).Errorf("Error when setting up jump to chain %s from %s "+
-				"and protocol protocol: %v", toChain, fromChain, protocol, err)
+				"and protocol protocol: %v; %v", toChain, fromChain, protocol, err)
 			return err
 		}
 	} else {
