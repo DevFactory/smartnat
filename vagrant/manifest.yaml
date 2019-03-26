@@ -1,0 +1,51 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: echo-test-service
+  namespace: default
+  labels:
+    app: echo-test-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: echo-test-service
+  template:
+    metadata:
+      labels:
+        app: echo-test-service
+    spec:
+      containers:
+      - name: echoserver
+        image: gcr.io/google_containers/echoserver:1.10
+        ports:
+        - containerPort: 8080
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: echo-test-service
+  namespace: default
+spec:
+  type: ClusterIP
+  selector:
+    app: echo-test-service
+  ports:
+  - protocol: TCP
+    port: 8080
+    targetPort: 8080
+---
+apiVersion: smartnat.aureacentral.com/v1alpha1
+kind: Mapping
+metadata:
+  name: mapping-echo-service
+spec:
+  addresses:
+  - "192.168.60.5"
+  allowedSources:
+  - "0.0.0.0/0"
+  serviceName: "echo-test-service" # the name of the Service to target; must be in the same namespace
+  mode: "service"                  # mandatory; "service" is currently the only supported mode
+  ports:                           # list; at least 1 address is required;
+  - port: 8080                     # maps from external port 8080 to 8080 TCP on Service side (same "servicePort:" and 'protocol: "TCP"' are defaults)

@@ -1,0 +1,51 @@
+Vagrant.configure("2") do |config|
+  config.vm.define "k8s" do |k8s|
+    k8s.vm.box = "flixtech/kubernetes"
+    #k8s.vm.provider "virtualbox" do |v|
+    #  v.customize ["modifyvm", :id, "--nic2", "none"]
+    #end
+    k8s.vm.network "private_network", ip: "192.168.50.4", virtualbox__intnet: "internal"
+  end
+
+  config.vm.define "smartnat" do |sn|
+    sn.vm.box = "debian/contrib-stretch64"
+    sn.vm.network "private_network", ip: "192.168.50.5", virtualbox__intnet: "internal"
+    sn.vm.network "private_network", ip: "192.168.60.5"
+    sn.vm.provision "shell", inline: "mkdir ~/.kube/ || true"
+    sn.vm.provision "shell", inline: "cat << EOF > ~/.kube/config
+apiVersion: v1
+clusters:
+- cluster:
+    server: http://192.168.50.4:8080
+  name: k8s
+contexts:
+- context:
+    cluster: k8s
+    user: k8s
+  name: k8s
+current-context: k8s
+kind: Config
+preferences: {}
+users:
+- name: k8s
+  user: {}
+EOF"
+    sn.vm.provision "shell", inline: "cp ~/.kube/config /etc/kubeconfig"
+    sn.vm.provision "shell", path: "../packer/install-smart-nat-debian.sh", env: {"KUBE_VER" => "1.12.1", "SN_VER" => "2.0.2"}
+
+# temp, remove
+    sn.vm.provision "file", source: "../deployment/kube-proxy/kube-proxy.service", destination: "/tmp/kube-proxy.service"
+    sn.vm.provision "shell", inline: "sudo mv /tmp/kube-proxy.service /etc/systemd/system/kube-proxy.service && systemctl daemon-reload"
+    sn.vm.provision "file", source: "../deployment/kube-proxy/kube-proxy.sh", destination: "/tmp/kube-proxy.sh"
+    sn.vm.provision "shell", inline: "sudo mv /tmp/kube-proxy.sh /usr/local/bin/kube-proxy.sh && sudo chmod +x /usr/local/bin/kube-proxy.sh"
+    sn.vm.provision "shell", inline: "sudo systemctl restart kube-proxy; sleep 2; systemctl restart smartnat"
+#temp end
+
+    sn.vm.provision "file", source: "../config/crds", destination: "/tmp"
+    sn.vm.provision "file", source: "../config/rbac", destination: "/tmp"
+    sn.vm.provision "shell", inline: "kubectl apply -f /tmp"
+    sn.vm.provision "file", source: "manifest.yaml", destination: "/tmp/manifest.yaml"
+    sn.vm.provision "shell", inline: "kubectl apply -f /tmp/manifest.yaml"
+  end
+end
+

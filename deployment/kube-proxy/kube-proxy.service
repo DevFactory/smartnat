@@ -2,7 +2,6 @@
 Description=kube-proxy
 
 [Service]
-EnvironmentFile=/etc/hostconfig
 ExecStart=/usr/local/bin/kube-proxy.sh
 Restart=always
 RestartSec=5

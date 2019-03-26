@@ -1,14 +1,106 @@
-# Intro
+# SmartNat
+
 [![GoDoc](https://godoc.org/github.com/DevFactory/smartnat?status.svg)](https://godoc.org/github.com/DevFactory/smartnat)
 [![Go Report Card](https://goreportcard.com/badge/github.com/DevFactory/smartnat)](https://goreportcard.com/report/github.com/DevFactory/smartnat)
 [![Build Status](https://travis-ci.com/DevFactory/smartnat.svg?branch=master)](https://travis-ci.com/DevFactory/smartnat)
 [![Coverage Status](https://coveralls.io/repos/github/DevFactory/smartnat/badge.svg?branch=master)](https://coveralls.io/github/DevFactory/smartnat?branch=master)
 
+## Intro
+
 SmartNat is a Kubernetes controller which exposes services using IP/TCP/UDP directly. It targets limitations that arise when you’re trying to use NodePort, LoadBalancer or Ingress for non-HTTP services. A single $10 Linux instance can expose hundreds of Services and with two of them you can already be Highly Available.
 SmartNat is configured using [CRDs](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) and implemented with [kubebuilder](https://book.kubebuilder.io/). It can run in HA mode and offers features like basic traffic filtering and port translation.
 Internally, SmartNat uses a lot of linux networking utilities like `ip route`, `ip addr`, `ip rule`, `iptables` and `ipset`. To easily execute and handle them, it heavily uses our [https://github.com/DevFactory/go-tools](https://github.com/DevFactory/go-tools) library.
 
-# How does it work
+## Quick start with vagrant
+
+If you want just to quickly see how SmartNat exposes kubernetes services, how a very simple deployment looks like and
+how to configure SmartNat's Mapping, start with a quick vagrant demo.
+
+To try SmartNat, first make sure you have [Vagrant](https://www.vagrantup.com/docs/installation/) and [VirtualBox](https://www.virtualbox.org/wiki/Downloads) installed.
+Then, checkout this repository and start vagrant in the `vagrant/` dir:
+
+```bash
+git clone https://github.com/DevFactory/smartnat.git
+cd smartnat/vagrant
+vagrant up
+```
+
+Once the machines are up, you can verify it's working by accessing the service with SmartNat endpoint:
+
+```bash
+$ curl 192.168.60.5:8080
+
+
+Hostname: echo-test-service-779b8c547c-j8vmx
+
+Pod Information:
+    -no pod information available-
+
+Server values:
+    server_version=nginx: 1.13.3 - lua: 10008
+
+Request Information:
+    client_address=10.10.0.1
+    method=GET
+    real path=/
+    query=
+    request_version=1.1
+    request_scheme=http
+    request_uri=http://192.168.60.5:8080/
+
+Request Headers:
+    accept=*/*
+    host=192.168.60.5:8080
+    user-agent=curl/7.61.0
+
+Request Body:
+    -no body in request-
+```
+
+You can check the configuration and status of the Mapping by running `kubectl` on the kubernetes virtual machine:
+
+```bash
+$ vagrant ssh -c "kubectl get mapping mapping-echo-service --export -o yaml" k8s
+apiVersion: smartnat.aureacentral.com/v1alpha1
+kind: Mapping
+metadata:
+  finalizers:
+  - mapping.finalizers.aureacentral.com
+  name: mapping-echo-service
+spec:
+  addresses:
+  - 192.168.60.5
+  allowedSources:
+  - 0.0.0.0/0
+  mode: service
+  ports:
+  - port: 8080
+    protocol: tcp
+    servicePort: 8080
+  serviceName: echo-test-service
+status:
+  configuredAddresses:
+    192.168.60.5:
+      podIPs:
+      - 10.10.0.131
+  invalid: "no"
+  serviceVIP: 10.0.0.36
+```
+
+### How the vagrant demo works
+
+The vagrant example starts 2 virtual machines for you:
+
+* 1st one is a one-node kubernetes "cluster", where insecure API endpoint is available on port :8080
+* 2nd one is a SmartNat instance, where `kube-proxy` and `smartnat` services run.
+
+Both of these instances are interconnected with a virtual private network called `internal`. Additionally, the SmartNat instance
+is also available from your host using one more network interface with IP `192.168.60.5`. On the kubernetes cluster, a simple
+workload is created - you can find it in [vagrant/manifest.yaml](vagrant/manifest.yaml). It defines a HTTP echo service consisting of
+a Deployment, Service and Mapping. The Mapping uses IP `192.168.60.5` and port `8080` to expose the echo service.
+
+## How SmartNat works
+
 SmartNat interconnects two networks: an internal network of a kubernetes cluster and an external network, where it has a set of static IP addresses assigned. Then, it can map any TCP/UDP traffic coming to one of the external IP addresses and ports to a virtual in-cluster IP address associated with one of your [kubernetes services](https://kubernetes.io/docs/concepts/services-networking/service/). That way you can expose multiple kubernetes services for each of the external IPs your node has configured. This is significantly cheaper than creating LoadBalancer for each of your Services and much more scalable than using NodePort.
 
 SmartNat is best run on a dedicated computing instance or cluster node, where it can setup all of its networking aspects. Such computing instance dedicated to running SmartNat controller is called just "SmartNat instance" further on.
@@ -18,7 +110,8 @@ Internally, SmartNat works by fetching information about its Mapping objects, Po
 The traffic and control flow of a cluster using a dedicated instance to run SmartNat controller is depicted below:
 ![Traffic and control flow](doc/smartnat_v2.svg)
 
-# Features
+## Features
+
 * Low level (L3/4 technology only): you can forward any protocol on top of TCP or UDP, not only HTTP.
 * Cheap: costs as much as a single Linux server, no need to create multiple LoadBalancers with your cloud provider.
 * High density: supports multiple network interfaces and multiple IP addresses on a single instance. Allows to configure mapping for a single IP:port pair(external endpoint).
@@ -29,32 +122,40 @@ The traffic and control flow of a cluster using a dedicated instance to run Smar
 * Security: supports basic traffic filtering based on client's source IP address.
 * Supports outgoing connections as well: your pods can leave the cluster with different external source IP addresses.
 
-# Use cases
+## Use cases
+
 SmartNat is most probably a good choice for you when:
+
 * you have many services to expose from your cluster and using LoadBalancers will be very expensive,
 * you need to expose services using a different protocol than HTTP,
 * you need to expose multiple services that want to use the same external TCP/UDP port.
 
-# Alternatives
+## Alternatives
+
 1. [NodePort](https://kubernetes.io/docs/concepts/services-networking/service/#nodeport): it allows you to expose any service on a specific port on each node, but you have to use the pre-configured range of port numbers (default: 30000-32767) and you can't really use different IP addresses for different services. Still, it might be good enough for simpler scenarios.
 1. [LoadBalancer](https://kubernetes.io/docs/concepts/services-networking/service/#loadbalancer): it allows you to easily expose your service using your cloud provider's load balancing service (ie. ELB on AWS). If you have a lot of services, this can cost a lot of money. Still, if you want and can accept the cost, this might be the easiest way to go.
 1. [Ingress](https://kubernetes.io/docs/concepts/services-networking/ingress/): this is probably the best solution if you have HTTP only services. Some Ingress implementations support TCP and UDP also, but you can't easily use multiple IP addresses with them. As a result, it won't be possible to expose different Services using the same port number.
 
-# Limitations
+## Limitations
+
 * Currently, external IPs and port numbers are assigned manually and statically, so you need to allocate them in advance.
 * You need to provision a dedicated server or cluster node to run your SmartNat. This instance has to have external network interfaces and IP addresses configured, but at the same time needs a dedicated network interface to connect to your cluster.
 * The performance, throughput and the number of services you can expose using a single SmartNat instance depends heavily on the networking and computing power of that instance. The operator of the instance is responsible for monitoring them.
 
-# User's guide
+## User's guide
+
 If SmartNat is already deployed in your cluster and you just want to configure it for your service, [read this](doc/user_guide.md).
 
-# Smartnat installation - getting started for administrators
+## SmartNat installation - getting started for administrators
+
 Please [check here](doc/ops_guide.md) for information about how to deploy SmartNat.
 
-# Getting started - developers
+## Getting started - developers
+
 If you want to to setup a dev environment and start coding on SmartNat, please [have a look here](doc/dev_guide.md).
 
-# FAQ
+## FAQ
+
 Q: Why the lowest version is 2.0.1?  
 A: Internally, we already had a previous implementation that was called "v1". To avoid confusion within the company, we had to start numbering this open source release with "v2".
 

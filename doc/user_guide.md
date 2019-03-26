@@ -1,15 +1,21 @@
 # User's guide
+
+## Introduction
+
 To use SmartNat as a user, you have to create a Mapping object definition and send it to kubernetes API endpoint, like any other object like Service or Deployment.
 
 To create a Mapping object, you have to prepare the following information:
+
 * What is the service name you want to expose? Mapping exposes a Service by name existing in the same namespace.
 * Which ports of the Service you want to expose? You can expose only a subset of what the Service provides.
 * Which external IP and port you want to use? Currently, these values are provided by the cluster operator/admin responsible for running SmartNat.
 * Do you want to limit access to your service to some client IP addresses?
 
 ## Configuration schema
+
 To create the Mapping, use YAML schema like below
-```
+
+```yaml
 apiVersion: smartnat.aureacentral.com/v1alpha1 # this is constant
 kind: Mapping
 metadata:
@@ -33,6 +39,7 @@ spec:
 ```
 
 In the example above, please note the following:
+
 * line 4 defines the Mapping name; it must be unique for a namespace,
 * actual specification starts in line 5 and includes:
   * line 6: the list of external IPs (at least 1) that are going to be mapped to a Service; the same set of IP and Ports can't be used by any other Mapping in the whole cluster,
@@ -42,14 +49,18 @@ In the example above, please note the following:
   * line 14: the list of port mappings; at least 1 is required; "protocol" can be skipped and defaults to "TCP"; "servicePort" can be skipped as well and defaults to the value of "port".
 
 ## Applying Mapping
+
 A configuration file like the one above can be applied to a k8s cluster using the usual command:
-```
+
+```bash
 kubectl [apply|create] -f mapping.yml
 ```
 
 ## Mapping status
+
 After the configuration is applied, you can get the created Mapping to get additional information about the status of requested configuration. It is shown in the Status field of the Mapping object:
-```
+
+```yaml
 $ kubectl -n default get mapping mapping-sample -o yaml
 apiVersion: smartnat.aureacentral.com/v1alpha1
 kind: Mapping
@@ -81,6 +92,6 @@ status:
 
 The Status info in the example above starts in line 21. The field "invalid" is set to "no" if your Mapping passed validation and can be configured correctly. If it contains anything different, it's a validation error message that explains what went wrong. In that case, no configuration for the Mapping is actually performed.
 
-The field "serviceVIP" shows what is the current IP addresses assigned by the kubernetes cluster to a Service that the Mapping is targeting. 
+The field "serviceVIP" shows what is the current IP addresses assigned by the kubernetes cluster to a Service that the Mapping is targeting.
 
 The last status field is "configuredAddresses". For each requested "spec.addresses" it includes information about configuration status of the IP. If the IP is missing, it means it was not yet configured. If the IP is present, the embedded "podIPs" list includes all IP addresses of currently running Pods, that are covered by the Mapping for this IP.
