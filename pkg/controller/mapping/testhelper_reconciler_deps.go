@@ -67,7 +67,7 @@ func getReconcilerDependencies(t *testing.T) *reconcilerDependencies {
 		ipRouteSmartNatHelperExecutor:     execMock,
 		ipRouteSmartNatHelperFileOperator: ioOp,
 		ipRouteSmartNatHelperUpdateChan:   routeUpdateChan,
-		scrubber:                          NewScrubber(ifaceProvider),
+		scrubber:                          NewScrubber(ifaceProvider, cfg),
 		mappingSyncer:                     &mocks.Syncer{},
 		heartbeatChan:                     heartbeatChan,
 	}

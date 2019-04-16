@@ -130,6 +130,7 @@ Advanced options:
 * "SNCTRLR_IPTABLES_TIMEOUT_SEC" - timeout in seconds for the `iptables` system command that is frequently called by smartnat. Default should be OK, might need to be increased on heavily loaded smartnat instances.
 * "SNCTRLR_AUTOREFRESH_PERIOD_SEC" - smartnat automatically reloads information about available network interface and assigned IP addresses. This setting controls how frequently (in seconds) should this information be loaded from the operating system. The default is 60 s.
 * "SNCTRLR_MAX_FINALIZE_WAIT_MINUTES" - sets the absolute finalizer timeout in minutes. The finalizer timeout is a safety mechanism that needs to be triggered if a smartnat instance has configured a Mapping and then the instance had failed and never came back. In that case, when the Mapping is removed, kubernetes doesn't really delete the Mapping until all smartnat nodes that had been configured for it confirm that the configuration was removed. A failed instance will never do that, so we use this timeout to forcibly remove the Mapping after SNCTRLR_AUTOREFRESH_PERIOD_SEC, even if it is indicated as being still configured on some smartnat nodes.
+* "SNCTRLR_MAX_PORTS_PER_MAPPING" - limits the number of Ports a single Mapping can configure. The number of exposed ports has influence on traffic forwarding rate and thus might be needed to tune by the administrator. The default is 50.
 
 ### 3. Cluster configuration
 

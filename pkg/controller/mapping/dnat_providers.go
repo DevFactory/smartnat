@@ -16,7 +16,6 @@ package mapping
 import (
 	"fmt"
 	"net"
-	"sort"
 	"strings"
 
 	"github.com/DevFactory/go-tools/pkg/extensions/collections"
@@ -27,6 +26,7 @@ import (
 
 const (
 	chainNamePrefix = "MAP"
+	ipSetNamePrefix = "DNAT"
 	markMasqComment = "mark for masquerade in " + masqPostroutingChain
 )
 
@@ -50,13 +50,16 @@ type DNATProvider interface {
 // supported configuration.
 type ThroughServiceDNAT struct {
 	iptables nettools.IPTablesHelper
+	ipset    nettools.IPSetHelper
 	namer    Namer
 }
 
 // NewThroughServiceDNATProvider returns new instance of the ThroughServiceDNAT
-func NewThroughServiceDNATProvider(iptables nettools.IPTablesHelper, namer Namer) DNATProvider {
+func NewThroughServiceDNATProvider(iptables nettools.IPTablesHelper, ipset nettools.IPSetHelper,
+	namer Namer) DNATProvider {
 	return &ThroughServiceDNAT{
 		iptables: iptables,
+		ipset:    ipset,
 		namer:    namer,
 	}
 }
@@ -79,15 +82,10 @@ func (p *ThroughServiceDNAT) SetupDNAT(externalIP net.IP, mapping *v1alpha1.Mapp
 		return err
 	}
 
-	// sort all external port numbers by protocol
-	tcpPorts, udpPorts := p.getPerProtocolPorts(mapping)
-	// jumps to chain
-	if err := p.synchronizeJumpPerProtocol(mapping, tcpPorts, externalIP, "tcp", preroutingChain, chainName); err != nil {
-		return err
-	}
-	if err := p.synchronizeJumpPerProtocol(mapping, udpPorts, externalIP, "udp", preroutingChain, chainName); err != nil {
-		return err
-	}
+	// create ipset that contains all "allowed_source_ip:proto,port" pairs
+	// and add iptables rules that checks against that set and jumps to
+	// per-service chain with per-port translation rules
+	p.synchronizeJumpAndIPSet(mapping, externalIP, preroutingChain, chainName)
 
 	// setup Masquerade marks if enabled
 	if setupMasquerade {
@@ -124,17 +122,25 @@ func (p *ThroughServiceDNAT) DeleteDNAT(externalIP net.IP, mapping *v1alpha1.Map
 		logrusWithMapping(mapping).Errorf("Error when flushing chain %s: %v", chainName, err)
 		return err
 	}
-	logrusWithMapping(mapping).Debugf("Removing jump(s) from chain %s to %s", preroutingChain, chainName)
-	if err := p.deleteJumpPerProtocol("tcp", preroutingChain, mapping); err != nil {
-		logrusWithMapping(mapping).Errorf("Error when deleting jump to chain %s from %s for "+
-			"protocol TCP: %v", chainName, preroutingChain, err)
+
+	// remove ipset
+	setName := p.getIPSetName(mapping)
+	if err := p.ipset.DeleteSet(setName); err != nil {
+		logrusWithMapping(mapping).Errorf("Error removing ipset %s: %v", setName, err)
 		return err
 	}
-	if err := p.deleteJumpPerProtocol("udp", preroutingChain, mapping); err != nil {
-		logrusWithMapping(mapping).Errorf("Error when deleting jump to chain %s from %s for "+
-			"protocol UDP: %v", chainName, preroutingChain, err)
+
+	// remove jump rule
+	comment := p.getJumpComment(mapping)
+	logrusWithMapping(mapping).Debugf("Deleting jump in chain %s with comment: %s",
+		chainName, comment)
+	if err := p.iptables.DeleteByComment(natTableName, preroutingChain, comment); err != nil {
+		logrusWithMapping(mapping).Errorf("Error deleting iptables jump from chain %s to %s: %v",
+			preroutingChain, chainName, err)
 		return err
 	}
+
+	// delete custom chain
 	logrusWithMapping(mapping).Debugf("Deleting chain %s", chainName)
 	if err := p.iptables.DeleteChain(natTableName, chainName); err != nil {
 		logrusWithMapping(mapping).Errorf("Error when deleting chain %s: %v", chainName, err)
@@ -143,24 +149,59 @@ func (p *ThroughServiceDNAT) DeleteDNAT(externalIP net.IP, mapping *v1alpha1.Map
 	return nil
 }
 
-func (p *ThroughServiceDNAT) synchronizeJumpPerProtocol(mapping *v1alpha1.Mapping, ports []v1alpha1.MappingPort,
-	externalIP net.IP, protocol, fromChain, toChain string) error {
-	if len(ports) > 0 {
-		logrusWithMapping(mapping).Debugf("Setting up jump to chain %s from %s for protocol %s", toChain,
-			fromChain, protocol)
-		if err := p.setupJumpPerProtocol(externalIP, protocol, ports, toChain, mapping); err != nil {
-			logrusWithMapping(mapping).Errorf("Error when setting up jump to chain %s from %s "+
-				"and protocol protocol: %v; %v", toChain, fromChain, protocol, err)
+func (p *ThroughServiceDNAT) synchronizeJumpAndIPSet(mapping *v1alpha1.Mapping, externalIP net.IP, fromChain,
+	toChain string) error {
+	// ensure ipset for this services exists
+	setName := p.getIPSetName(mapping)
+	logrusWithMapping(mapping).Debugf("Ensuring ipset %s exists", setName)
+	if err := p.ipset.EnsureSetExists(setName, "hash:net,port"); err != nil {
+		logrusWithMapping(mapping).Errorf("Error creating ipset: %v", err)
+		return err
+	}
+
+	// synchronize ipset content
+	logrusWithMapping(mapping).Debugf("Synchronizing entries in ipset %s", setName)
+	tcpPorts, udpPorts := p.getPerProtocolPorts(mapping)
+	netPorts := []nettools.NetPort{}
+	for _, allowedSrc := range mapping.Spec.AllowedSources {
+		_, srcNet, err := net.ParseCIDR(allowedSrc)
+		if err != nil {
+			logrusWithMapping(mapping).Errorf("Error parsing allowed source %s: %v", allowedSrc, err)
 			return err
 		}
-	} else {
-		if err := p.deleteJumpPerProtocol(protocol, fromChain, mapping); err != nil {
-			logrusWithMapping(mapping).Errorf("Error when deleting jump to chain %s from %s for "+
-				"protocol %s: %v", toChain, fromChain, protocol, err)
-			return err
+		endpoints := []struct {
+			ports []v1alpha1.MappingPort
+			proto nettools.Protocol
+		}{
+			{tcpPorts, nettools.TCP},
+			{udpPorts, nettools.UDP},
+		}
+		for _, ep := range endpoints {
+			for _, port := range ep.ports {
+				netPort := nettools.NetPort{
+					Net:      *srcNet,
+					Port:     uint16(port.Port),
+					Protocol: ep.proto,
+				}
+				netPorts = append(netPorts, netPort)
+			}
 		}
 	}
-	return nil
+	if err := p.ipset.EnsureSetHasOnlyNetPort(setName, netPorts); err != nil {
+		logrusWithMapping(mapping).Errorf("Error synchronizing entries in ipset %s: %v", setName, err)
+		return err
+	}
+
+	// ensure jump to toChain exists with match against the ipset
+	logrusWithMapping(mapping).Debugf("Adding jump from chain %s to chain %s using ipset %s",
+		fromChain, toChain, setName)
+	return p.iptables.EnsureExistsOnlyAppend(nettools.IPTablesRuleArgs{
+		Table:     natTableName,
+		ChainName: fromChain,
+		Selector:  []string{"-d", fmt.Sprintf("%s/32", externalIP.String()), "-m", "set", "--match-set", setName, "src,dst"},
+		Action:    []string{toChain},
+		Comment:   p.getJumpComment(mapping),
+	})
 }
 
 // synchronizePerPortRules needs to get current rules in the specified chain and the new set
@@ -169,14 +210,15 @@ func (p *ThroughServiceDNAT) synchronizeJumpPerProtocol(mapping *v1alpha1.Mappin
 func (p *ThroughServiceDNAT) synchronizePerPortRules(mapping *v1alpha1.Mapping, svc *v1.Service,
 	chainName string) error {
 	logrusWithMapping(mapping).Debugf("Starting to synchronize per port rules in chain %s", chainName)
-	// load current rules from the chain - tentatively we will remove all rules from this list
+	// load current rules from the chain
 	current, err := p.iptables.LoadRules(natTableName, chainName)
 	if err != nil {
 		logrusWithMapping(mapping).Errorf("Error getting iptables rules from the operating system for"+
 			" chain %s. Error: %v", chainName, err)
 		return err
 	}
-	current = p.skipMarkMasq(current)
+	// exclude the mark for masquerade rule, so it is always kept
+	current = p.excludeMarkMasqRule(current)
 	new := p.rulesFromMappedPorts(mapping, svc.Spec.ClusterIP, chainName)
 
 	// now find set difference "current\new" and "new\current"
@@ -220,7 +262,7 @@ func (p *ThroughServiceDNAT) synchronizePerPortRules(mapping *v1alpha1.Mapping, 
 	return nil
 }
 
-func (*ThroughServiceDNAT) skipMarkMasq(rules []*nettools.IPTablesRuleArgs) []*nettools.IPTablesRuleArgs {
+func (*ThroughServiceDNAT) excludeMarkMasqRule(rules []*nettools.IPTablesRuleArgs) []*nettools.IPTablesRuleArgs {
 	res := make([]*nettools.IPTablesRuleArgs, 0, len(rules))
 	for _, rule := range rules {
 		if rule.Comment == markMasqComment {
@@ -248,39 +290,8 @@ func (p *ThroughServiceDNAT) rulesFromMappedPorts(mapping *v1alpha1.Mapping, svc
 	return new
 }
 
-func (p *ThroughServiceDNAT) setupJumpPerProtocol(externalIP net.IP, protocol string,
-	ports []v1alpha1.MappingPort, chainName string, mapping *v1alpha1.Mapping) error {
-	list := make([]string, 0, len(ports))
-	for _, port := range ports {
-		list = append(list, fmt.Sprintf("%d", port.Port))
-	}
-	stringList := strings.Join(list, ",")
-	logrusWithMapping(mapping).Debugf("Setting jump from %s to %s for protocol %s",
-		preroutingChain, chainName, protocol)
-	src := make([]string, len(mapping.Spec.AllowedSources))
-	copy(src, mapping.Spec.AllowedSources)
-	sort.Strings(src)
-	allowedSources := strings.Join(src, ",")
-	return p.iptables.EnsureExistsOnlyAppend(nettools.IPTablesRuleArgs{
-		Table:     natTableName,
-		ChainName: preroutingChain,
-		Selector: []string{"-d", fmt.Sprintf("%s/32", externalIP.String()), "-p", protocol,
-			"-m", "multiport", "--dports", stringList, "-s", allowedSources},
-		Action:  []string{chainName},
-		Comment: p.getJumpComment(mapping, protocol),
-	})
-}
-
-func (p *ThroughServiceDNAT) deleteJumpPerProtocol(protocol string, chainName string,
-	mapping *v1alpha1.Mapping) error {
-	comment := p.getJumpComment(mapping, protocol)
-	logrusWithMapping(mapping).Debugf("Deleting jump in chain %s with comment: %s",
-		chainName, comment)
-	return p.iptables.DeleteByComment(natTableName, chainName, comment)
-}
-
-func (p *ThroughServiceDNAT) getJumpComment(mapping *v1alpha1.Mapping, protocol string) string {
-	return fmt.Sprintf("for mapping %s/%s [%s]", mapping.Namespace, mapping.Name, protocol)
+func (p *ThroughServiceDNAT) getJumpComment(mapping *v1alpha1.Mapping) string {
+	return fmt.Sprintf("for mapping %s/%s", mapping.Namespace, mapping.Name)
 }
 
 func (p *ThroughServiceDNAT) getPerProtocolPorts(mapping *v1alpha1.Mapping) (
@@ -300,4 +311,8 @@ func (p *ThroughServiceDNAT) getPerProtocolPorts(mapping *v1alpha1.Mapping) (
 
 func (p *ThroughServiceDNAT) getChainName(mapping *v1alpha1.Mapping) string {
 	return fmt.Sprintf("%s-%s", chainNamePrefix, p.namer.Name(mapping.ObjectMeta))
+}
+
+func (p *ThroughServiceDNAT) getIPSetName(mapping *v1alpha1.Mapping) string {
+	return fmt.Sprintf("%s-%s", ipSetNamePrefix, p.namer.Name(mapping.ObjectMeta))
 }

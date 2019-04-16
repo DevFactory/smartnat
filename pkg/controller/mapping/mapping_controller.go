@@ -67,7 +67,8 @@ func Add(mgr manager.Manager, heartbeatChan chan<- string) error {
 	}
 	iptablesHelper := nettools.NewExecIPTablesHelper(executor, time.Duration(cfg.IPTablesTimeoutSec)*time.Second)
 	namer := NewNamer()
-	dnatProvider := NewThroughServiceDNATProvider(iptablesHelper, namer)
+	ipsetHelper := nettools.NewExecIPSetHelper(executor)
+	dnatProvider := NewThroughServiceDNATProvider(iptablesHelper, ipsetHelper, namer)
 	ipTablesHelper, err := NewIPTablesHelper(dnatProvider, iptablesHelper, namer, interfaceProvider,
 		cfg.SetupMasquerade, cfg.SetupSNAT)
 	if err != nil {
@@ -75,9 +76,8 @@ func Add(mgr manager.Manager, heartbeatChan chan<- string) error {
 	}
 	routeIoOp := nettools.NewIOSimpleFileOperator()
 	ipRouteHelper := NewIPRouteSmartNatHelper(executor, routeIoOp, interfaceProvider, refreshInterval, cfg.GwAddressOffset)
-	scrubber := NewScrubber(interfaceProvider)
+	scrubber := NewScrubber(interfaceProvider, cfg)
 	conntrackHelper := nettools.NewExecConntrackHelper(executor)
-	ipsetHelper := nettools.NewExecIPSetHelper(executor)
 	syncer := NewSyncer(namer, interfaceProvider, ipRouteHelper, conntrackHelper, ipTablesHelper, ipsetHelper,
 		cfg.SetupSNAT, cfg.SetupMasquerade)
 	return add(mgr, newReconciler(mgr, cfg, interfaceProvider, ipRouteHelper, syncer, scrubber, heartbeatChan))
@@ -622,6 +622,7 @@ func (r *ReconcileMapping) checkSetupFinalizer(mapping *smartnatv1alpha1.Mapping
 	return false, false, nil
 }
 
+// GetHeartbeatString returns string printed by heartbeat http request
 func GetHeartbeatString() string {
 	return fmt.Sprintf("OK %v", time.Now().UTC().Format(time.RFC3339))
 }

@@ -47,11 +47,12 @@ type testCase struct {
 	externalIP         net.IP
 	dport, servicePort int32
 	allowed            string
+	allowedNet         *net.IPNet
 	serviceIP          string
 	meta               v1meta.ObjectMeta
 	mapping            *v1alpha1.Mapping
 	svc                *v1.Service
-	customChain        string
+	customChain, ipset string
 }
 
 func getTestCase() testCase {
@@ -61,6 +62,7 @@ func getTestCase() testCase {
 		Namespace: "test",
 	}
 	allowed := "0.0.0.0/0"
+	_, allowedNet, _ := net.ParseCIDR(allowed)
 	serviceIP := "172.16.1.1"
 	return testCase{
 		extIP:       extIP,
@@ -68,6 +70,7 @@ func getTestCase() testCase {
 		dport:       80,
 		servicePort: 8080,
 		allowed:     allowed,
+		allowedNet:  allowedNet,
 		serviceIP:   serviceIP,
 		meta:        meta,
 		mapping: &v1alpha1.Mapping{
@@ -85,6 +88,7 @@ func getTestCase() testCase {
 			},
 		},
 		customChain: "MAP-MDICIJE6TVWKE333NKHBEORO",
+		ipset:       "DNAT-MDICIJE6TVWKE333NKHBEORO",
 	}
 }
 
@@ -102,7 +106,7 @@ func Test_throughServiceDNATProvider_SetupDNAT(t *testing.T) {
 	tests := []struct {
 		name  string
 		ports []v1alpha1.MappingPort
-		init  func(ipt *ntmocks.IPTablesHelper)
+		init  func(ipt *ntmocks.IPTablesHelper, ips *ntmocks.IPSetHelper)
 	}{
 		{
 			name: "tcp only, no existing rules",
@@ -113,16 +117,23 @@ func Test_throughServiceDNATProvider_SetupDNAT(t *testing.T) {
 					ServicePort: c.servicePort,
 				},
 			},
-			init: func(ipt *ntmocks.IPTablesHelper) {
+			init: func(ipt *ntmocks.IPTablesHelper, ips *ntmocks.IPSetHelper) {
 				ipt.
+					On("EnsureChainExists", "nat", c.customChain).Return(nil).
 					On("EnsureExistsOnlyAppend",
-						getIptablesProtoJumpRule(c.extIP, protoTcp, c.allowed, c.customChain, c.dport, c.meta)).Return(nil).
-					On("DeleteByComment", natTableName, preroutingChain, fmt.Sprintf("for mapping %s/%s [%s]",
-						c.mapping.Namespace, c.mapping.Name, protoUdp)).Return(nil).
+						getIptablesProtoJumpRule(c.extIP, c.customChain, c.ipset, c.meta)).Return(nil).
 					On("EnsureExistsInsert", iptablesMarkRule).Return(nil).
 					On("LoadRules", natTableName, c.customChain).Return([]*nt.IPTablesRuleArgs{}, nil).
 					On("EnsureExistsAppend",
 						getIptablesDNATRule(c.serviceIP, protoTcp, c.customChain, c.dport, c.servicePort, c.meta)).Return(nil)
+				ips.On("EnsureSetExists", c.ipset, "hash:net,port").Return(nil).
+					On("EnsureSetHasOnlyNetPort", c.ipset, []nettools.NetPort{
+						nettools.NetPort{
+							Net:      *c.allowedNet,
+							Port:     uint16(c.dport),
+							Protocol: nettools.TCP,
+						},
+					}).Return(nil)
 			},
 		},
 		{
@@ -139,12 +150,11 @@ func Test_throughServiceDNATProvider_SetupDNAT(t *testing.T) {
 					ServicePort: c.servicePort,
 				},
 			},
-			init: func(ipt *ntmocks.IPTablesHelper) {
+			init: func(ipt *ntmocks.IPTablesHelper, ips *ntmocks.IPSetHelper) {
 				ipt.
+					On("EnsureChainExists", "nat", c.customChain).Return(nil).
 					On("EnsureExistsOnlyAppend",
-						getIptablesProtoJumpRule(c.extIP, protoTcp, c.allowed, c.customChain, c.dport, c.meta)).Return(nil).
-					On("EnsureExistsOnlyAppend",
-						getIptablesProtoJumpRule(c.extIP, protoUdp, c.allowed, c.customChain, c.dport, c.meta)).Return(nil).
+						getIptablesProtoJumpRule(c.extIP, c.customChain, c.ipset, c.meta)).Return(nil).
 					On("EnsureExistsInsert", iptablesMarkRule).Return(nil).
 					On("LoadRules", natTableName, c.customChain).Return(
 					[]*nt.IPTablesRuleArgs{&iptablesBogusExistingRule}, nil).
@@ -153,6 +163,19 @@ func Test_throughServiceDNATProvider_SetupDNAT(t *testing.T) {
 						getIptablesDNATRule(c.serviceIP, protoTcp, c.customChain, c.dport, c.servicePort, c.meta)).Return(nil).
 					On("EnsureExistsAppend",
 						getIptablesDNATRule(c.serviceIP, protoUdp, c.customChain, c.dport, c.servicePort, c.meta)).Return(nil)
+				ips.On("EnsureSetExists", c.ipset, "hash:net,port").Return(nil).
+					On("EnsureSetHasOnlyNetPort", c.ipset, []nettools.NetPort{
+						nettools.NetPort{
+							Net:      *c.allowedNet,
+							Port:     uint16(c.dport),
+							Protocol: nettools.TCP,
+						},
+						nettools.NetPort{
+							Net:      *c.allowedNet,
+							Port:     uint16(c.dport),
+							Protocol: nettools.UDP,
+						},
+					}).Return(nil)
 			},
 		},
 	}
@@ -160,13 +183,14 @@ func Test_throughServiceDNATProvider_SetupDNAT(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c.mapping.Spec.Ports = tt.ports
 			iptables := &ntmocks.IPTablesHelper{}
-			iptables.On("EnsureChainExists", "nat", c.customChain).Return(nil)
-			tt.init(iptables)
-			dnat := mapping.NewThroughServiceDNATProvider(iptables, mapping.NewNamer())
+			ipset := &ntmocks.IPSetHelper{}
+			tt.init(iptables, ipset)
+			dnat := mapping.NewThroughServiceDNATProvider(iptables, ipset, mapping.NewNamer())
 			// call SetupDNAT
 			err := dnat.SetupDNAT(c.externalIP, c.mapping, c.svc, nil, true)
 			assert.Nil(t, err)
 			iptables.AssertExpectations(t)
+			ipset.AssertExpectations(t)
 		})
 	}
 }
@@ -210,12 +234,12 @@ func Test_throughServiceDNATProvider_DeleteDNAT(t *testing.T) {
 			iptables := &ntmocks.IPTablesHelper{}
 			iptables.
 				On("FlushChain", "nat", c.customChain).Return(nil).
-				On("DeleteByComment", natTableName, preroutingChain, fmt.Sprintf("for mapping %s/%s [%s]",
-					c.mapping.Namespace, c.mapping.Name, protoTcp)).Return(nil).
-				On("DeleteByComment", natTableName, preroutingChain, fmt.Sprintf("for mapping %s/%s [%s]",
-					c.mapping.Namespace, c.mapping.Name, protoUdp)).Return(nil).
+				On("DeleteByComment", natTableName, preroutingChain, fmt.Sprintf("for mapping %s/%s",
+					c.mapping.Namespace, c.mapping.Name)).Return(nil).
 				On("DeleteChain", natTableName, c.customChain).Return(nil)
-			dnat := mapping.NewThroughServiceDNATProvider(iptables, mapping.NewNamer())
+			ipset := &ntmocks.IPSetHelper{}
+			ipset.On("DeleteSet", c.ipset).Return(nil)
+			dnat := mapping.NewThroughServiceDNATProvider(iptables, ipset, mapping.NewNamer())
 			// call DeleteDNAT
 			err := dnat.DeleteDNAT(c.externalIP, c.mapping)
 			assert.Nil(t, err)
@@ -224,15 +248,14 @@ func Test_throughServiceDNATProvider_DeleteDNAT(t *testing.T) {
 	}
 }
 
-func getIptablesProtoJumpRule(extIP, proto, allowed, customChain string, dport int32,
+func getIptablesProtoJumpRule(extIP, customChain, ipset string,
 	meta v1meta.ObjectMeta) nettools.IPTablesRuleArgs {
 	return nettools.IPTablesRuleArgs{
 		Table:     natTableName,
 		ChainName: preroutingChain,
-		Selector: []string{"-d", fmt.Sprintf("%s/32", extIP), "-p", proto,
-			"-m", "multiport", "--dports", fmt.Sprintf("%d", dport), "-s", allowed},
-		Action:  []string{customChain},
-		Comment: fmt.Sprintf("for mapping %s/%s [%s]", meta.Namespace, meta.Name, proto),
+		Selector:  []string{"-d", fmt.Sprintf("%s/32", extIP), "-m", "set", "--match-set", ipset, "src,dst"},
+		Action:    []string{customChain},
+		Comment:   fmt.Sprintf("for mapping %s/%s", meta.Namespace, meta.Name),
 	}
 }
 

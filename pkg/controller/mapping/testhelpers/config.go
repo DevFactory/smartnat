@@ -20,7 +20,7 @@ import (
 )
 
 func GetTestConfig(t *testing.T) *config.Config {
-	cfg, err := config.NewConfigFromArgs("eth[0-9]+", true, false, "eth0", 10, true, 10, 60, 1, 8080)
+	cfg, err := config.NewConfigFromArgs("eth[0-9]+", true, false, "eth0", 10, true, 10, 60, 1, 8080, 50)
 	if err != nil {
 		t.Logf("Cannot create configuration object: %v", err)
 		t.Fail()

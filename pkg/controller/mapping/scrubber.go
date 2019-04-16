@@ -22,14 +22,13 @@ import (
 	"github.com/DevFactory/go-tools/pkg/nettools"
 	"github.com/DevFactory/smartnat/pkg/apis/smartnat/v1alpha1"
 	smartnatv1alpha1 "github.com/DevFactory/smartnat/pkg/apis/smartnat/v1alpha1"
+	"github.com/DevFactory/smartnat/pkg/config"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
 )
 
 const (
-	pfx = "SmartNat validation failed: "
-	// MaxPortsPerProtocol - iptables multiport extension supports max 15 ports as arguments
-	MaxPortsPerProtocol    = 15
+	pfx                    = "SmartNat validation failed: "
 	defaultInvalidOKStatus = "no"
 )
 
@@ -49,12 +48,14 @@ type Scrubber interface {
 
 type scrubber struct {
 	provider nettools.InterfaceProvider
+	config   *config.Config
 }
 
 // NewScrubber returns a scrubber for SmartNat objects
-func NewScrubber(interfaceProvider nettools.InterfaceProvider) Scrubber {
+func NewScrubber(interfaceProvider nettools.InterfaceProvider, cfg *config.Config) Scrubber {
 	return &scrubber{
 		provider: interfaceProvider,
+		config:   cfg,
 	}
 }
 
@@ -219,15 +220,9 @@ func (s *scrubber) validatePorts(mapping *v1alpha1.Mapping) (bool, string) {
 		}
 		usedPorts[key] = true
 	}
-	if tcpCount > MaxPortsPerProtocol {
-		msg := fmt.Sprintf("Too many TCP ports configured. Max is %d, found %d",
-			MaxPortsPerProtocol, tcpCount)
-		logrusWithMapping(mapping).Info(pfx + msg)
-		return false, msg
-	}
-	if udpCount > MaxPortsPerProtocol {
-		msg := fmt.Sprintf("Too many UDP ports configured. Max is %d, found %d",
-			MaxPortsPerProtocol, udpCount)
+	if tcpCount+udpCount > s.config.MaxPortsPerMapping {
+		msg := fmt.Sprintf("Too many ports configured. Max is %d, found %d", s.config.MaxPortsPerMapping,
+			tcpCount+udpCount)
 		logrusWithMapping(mapping).Info(pfx + msg)
 		return false, msg
 	}

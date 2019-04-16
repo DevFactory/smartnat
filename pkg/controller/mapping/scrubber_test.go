@@ -19,12 +19,14 @@ import (
 	ntmocks "github.com/DevFactory/go-tools/pkg/nettools/mocks"
 	"github.com/DevFactory/smartnat/pkg/apis/smartnat/v1alpha1"
 	"github.com/DevFactory/smartnat/pkg/controller/mapping"
+	"github.com/DevFactory/smartnat/pkg/controller/mapping/testhelpers"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	v1meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func Test_scrubber_ScrubMapping(t *testing.T) {
+	cfg := testhelpers.GetTestConfig(t)
 	// OK uses all features
 	valid1 := &v1alpha1.Mapping{
 		ObjectMeta: v1meta.ObjectMeta{
@@ -118,19 +120,17 @@ func Test_scrubber_ScrubMapping(t *testing.T) {
 		},
 	}
 	// wrong - uses to many ports per protocol
-	wrongTooManyTcpPorts := valid1.DeepCopy()
-	wrongTooManyUdpPorts := valid1.DeepCopy()
-	var i int32
-	for i = 0; i < mapping.MaxPortsPerProtocol+1; i++ {
-		wrongTooManyTcpPorts.Spec.Ports = append(wrongTooManyTcpPorts.Spec.Ports, v1alpha1.MappingPort{
-			Port:        i + 2000,
-			Protocol:    "tcp",
-			ServicePort: i + 2000,
-		})
-		wrongTooManyUdpPorts.Spec.Ports = append(wrongTooManyUdpPorts.Spec.Ports, v1alpha1.MappingPort{
-			Port:        i + 2000,
-			Protocol:    "udp",
-			ServicePort: i + 2000,
+	wrongTooManyPorts := valid1.DeepCopy()
+	for i := 0; i < cfg.MaxPortsPerMapping+1; i++ {
+		num := int32(i + 2000)
+		proto := "tcp"
+		if num%2 == 0 {
+			proto = "udp"
+		}
+		wrongTooManyPorts.Spec.Ports = append(wrongTooManyPorts.Spec.Ports, v1alpha1.MappingPort{
+			Port:        num,
+			Protocol:    proto,
+			ServicePort: num,
 		})
 	}
 
@@ -227,13 +227,8 @@ func Test_scrubber_ScrubMapping(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "Fails because uses too many TCP ports",
-			sn:   wrongTooManyTcpPorts,
-			want: false,
-		},
-		{
-			name: "Fails because uses too many UDP ports",
-			sn:   wrongTooManyUdpPorts,
+			name: "Fails because uses too many ports",
+			sn:   wrongTooManyPorts,
 			want: false,
 		},
 	}
@@ -244,7 +239,7 @@ func Test_scrubber_ScrubMapping(t *testing.T) {
 				t.Logf("Cannot create ifaceProvider object: %v", err)
 				t.Fail()
 			}
-			s := mapping.NewScrubber(ifaceProvider)
+			s := mapping.NewScrubber(ifaceProvider, cfg)
 			valid, _, _, _ := s.ScrubMapping(tt.sn, tt.others)
 			if valid != tt.want {
 				t.Errorf("scrubber.ScrubMapping() got = %v, want %v", valid, tt.want)
@@ -260,6 +255,7 @@ func Test_scrubber_ScrubMapping(t *testing.T) {
 }
 
 func Test_scrubber_ValidateEndpoints(t *testing.T) {
+	cfg := testhelpers.GetTestConfig(t)
 	tests := []struct {
 		name      string
 		endpoints *v1.Endpoints
@@ -316,7 +312,7 @@ func Test_scrubber_ValidateEndpoints(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			provider, _, _ := ntmocks.NewMockInterfaceProvider(".*", false)
-			s := mapping.NewScrubber(provider)
+			s := mapping.NewScrubber(provider, cfg)
 			if err := s.ValidateEndpoints(nil, tt.endpoints); (err != nil) != tt.wantErr {
 				t.Errorf("scrubber.ValidateEndpoints() error = %v, wantErr %v", err, tt.wantErr)
 			}
