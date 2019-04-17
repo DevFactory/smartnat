@@ -15,6 +15,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"regexp"
 
@@ -33,6 +34,7 @@ type Config struct {
 	MaxFinalizeWaitMinutes        int
 	GwAddressOffset               int32
 	MonPort                       int
+	MonIP                         string
 	MaxPortsPerMapping            int
 }
 
@@ -80,6 +82,8 @@ const (
 	snctrlrGwAddressOffset = "SNCTRLR_GW_ADDRESS_OFFSET"
 	// snctrlrMonitorPort configures TCP port for exposing HTTP healthcheck and performance metrics
 	snctrlrMonitorPort = "SNCTRLR_MONITOR_PORT"
+	// snctrlrMonitorIP configures IP for exposing HTTP healthcheck and performance metrics
+	snctrlrMonitorIP = "SNCTRLR_MONITOR_IP"
 	// snctrlrMaxPortsPerMapping configures a limit of ports used by a single mapping
 	snctrlrMaxPortsPerMapping = "SNCTRLR_MAX_PORTS_PER_MAPPING"
 )
@@ -94,7 +98,7 @@ func NewConfig() (*Config, error) {
 // NewConfigFromArgs creates new config struct from arguments, after running validation
 func NewConfigFromArgs(interfaceNamePattern string, setupMasquerade, setupSNAT bool, defaultGWInterface string,
 	ipTablesTimeoutSec int, enableDebug bool, interfaceAutorefreshPeriodSec, maxFinalizeWaitMinutes int,
-	gwAddressOffset int32, monitorPort int, maxPortsPerMapping int) (*Config, error) {
+	gwAddressOffset int32, monitorPort int, monitorIP string, maxPortsPerMapping int) (*Config, error) {
 	cfg := &Config{
 		DefaultGWInterface:            defaultGWInterface,
 		EnableDebug:                   enableDebug,
@@ -106,6 +110,7 @@ func NewConfigFromArgs(interfaceNamePattern string, setupMasquerade, setupSNAT b
 		MaxFinalizeWaitMinutes:        maxFinalizeWaitMinutes,
 		GwAddressOffset:               gwAddressOffset,
 		MonPort:                       monitorPort,
+		MonIP:                         monitorIP,
 		MaxPortsPerMapping:            maxPortsPerMapping,
 	}
 	err := cfg.validate()
@@ -125,6 +130,12 @@ func (cfg *Config) load() error {
 	offset, _ := eos.GetIntFromEnvVarWithDefault(snctrlrGwAddressOffset, 1)
 	cfg.GwAddressOffset = int32(offset)
 	cfg.MonPort, _ = eos.GetIntFromEnvVarWithDefault(snctrlrMonitorPort, 8080)
+	ip, isSet := os.LookupEnv(snctrlrMonitorIP)
+	if isSet {
+		cfg.MonIP = ip
+	} else {
+		cfg.MonIP = "127.0.0.1"
+	}
 	cfg.MaxPortsPerMapping, _ = eos.GetIntFromEnvVarWithDefault(snctrlrMaxPortsPerMapping, 50)
 	return cfg.validate()
 }
@@ -153,6 +164,11 @@ func (cfg *Config) validate() error {
 	}
 	if cfg.MonPort <= 0 || cfg.MonPort > 65535 {
 		return fmt.Errorf("Configuration env var %s must be a valid TCP port num (1-65535)", snctrlrMonitorPort)
+	}
+	if cfg.MonIP != "" {
+		if ip := net.ParseIP(cfg.MonIP); ip == nil {
+			return fmt.Errorf("Configuration env var %s is not a correct IP address: %s", snctrlrMonitorIP, cfg.MonIP)
+		}
 	}
 	return nil
 }

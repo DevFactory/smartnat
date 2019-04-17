@@ -110,7 +110,7 @@ func main() {
 	}()
 	http.HandleFunc("/healthcheck", handleHealthcheck)
 	go func() {
-		http.ListenAndServe(fmt.Sprintf(":%d", mgrCfg.MonPort), nil)
+		http.ListenAndServe(fmt.Sprintf("%s:%d", mgrCfg.MonIP, mgrCfg.MonPort), nil)
 	}()
 
 	// Start the Cmd

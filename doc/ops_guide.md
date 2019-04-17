@@ -122,6 +122,7 @@ The manager can be configured using the following environment variables:
 * "SNCTRLR_INTERFACES_PATTERN" - configures a regular expression for network interface names which are external (client facing). Only matching interfaces and their addresses will be serviced by smartnat. Example: `eth[1-9][0-9]*` means _everything that starts with `eth`, but not `eth0`_.
 * "SNCTRLR_GW_ADDRESS_OFFSET" - configures the offset of router's IP address for all the external network interfaces matching SNCTRLR_INTERFACES_PATTERN. A positive offset is counted forward from the subnet's address of the 1st IP found on the interface (so, if the IP is "10.10.10.10/24" and offset is 1, the assumed router/gateway on this interface is "10.10.10.1"). A negative offset is counted backwards from the broadcast address (so, if the IP is "10.10.10.10/24" and the offset is -1, the assumed gateway IP on this interface is "10.10.10.254"). Please make sure that on all external interfaces the offset correctly points to the gateway routing the traffic outgoing from that interface.
 * "SNCTRLR_MONITOR_PORT" - configures TCP port for exposing HTTP health check
+* "SNCTRLR_MONITOR_IP" - configures IP address to bind to for exposing HTTP health check; if no value is set, `127.0.0.1` is used; to bind to all IP addresses, use empty string (``)
 
 Advanced options:
 
