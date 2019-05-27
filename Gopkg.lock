@@ -10,7 +10,7 @@
   version = "v0.34.0"
 
 [[projects]]
-  digest = "1:5fab90311f251dd2813cb016ba64841c953fb7070bc028eedc1e7852d1fa7347"
+  digest = "1:cc163e8ee12e0f317961adb7d2fc8ed45bae710528a3efe78f8baafbb0f2058e"
   name = "github.com/DevFactory/go-tools"
   packages = [
     "pkg/extensions/collections",
@@ -19,14 +19,12 @@
     "pkg/extensions/strings",
     "pkg/extensions/time",
     "pkg/linux/command",
-    "pkg/linux/command/mock",
     "pkg/nettools",
     "pkg/nettools/mocks",
-    "pkg/nettools/testhelpers",
   ]
   pruneopts = "T"
-  revision = "5438de9ccc074183d42dd5cf7cc9e9710aca3b1e"
-  version = "v0.2.2"
+  revision = "4b593794aef849946e2bf3b187158f76d8c14fb8"
+  version = "v0.2.3"
 
 [[projects]]
   branch = "master"
@@ -999,10 +997,8 @@
     "github.com/DevFactory/go-tools/pkg/extensions/strings",
     "github.com/DevFactory/go-tools/pkg/extensions/time",
     "github.com/DevFactory/go-tools/pkg/linux/command",
-    "github.com/DevFactory/go-tools/pkg/linux/command/mock",
     "github.com/DevFactory/go-tools/pkg/nettools",
     "github.com/DevFactory/go-tools/pkg/nettools/mocks",
-    "github.com/DevFactory/go-tools/pkg/nettools/testhelpers",
     "github.com/emicklei/go-restful",
     "github.com/onsi/ginkgo",
     "github.com/onsi/gomega",
@@ -1010,7 +1006,6 @@
     "github.com/stretchr/testify/assert",
     "github.com/stretchr/testify/mock",
     "golang.org/x/net/context",
-    "k8s.io/api/apps/v1",
     "k8s.io/api/core/v1",
     "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1",
     "k8s.io/apimachinery/pkg/api/errors",
@@ -1018,6 +1013,7 @@
     "k8s.io/apimachinery/pkg/runtime",
     "k8s.io/apimachinery/pkg/runtime/schema",
     "k8s.io/apimachinery/pkg/types",
+    "k8s.io/apimachinery/pkg/util/intstr",
     "k8s.io/apimachinery/pkg/util/validation",
     "k8s.io/client-go/kubernetes/scheme",
     "k8s.io/client-go/plugin/pkg/client/auth/gcp",

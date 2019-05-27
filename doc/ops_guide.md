@@ -17,6 +17,7 @@ The general requirements are:
   * `ipvsadm`
   * `ip`
   * `conntrack`
+  * GNU AWK (`gawk`) as the default `awk` binary
 * enabled and running NTP time synchronization service, like `ntpd`
 * enabled IPv4 forwarding, for example using `sysctl` directly by setting: `net.ipv4.ip_forward=1`
 
