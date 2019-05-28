@@ -49,18 +49,24 @@ type DNATProvider interface {
 // is not running in 'iptables' mode. 'IPVS' kube-proxy is highly recommended and the only
 // supported configuration.
 type ThroughServiceDNAT struct {
-	iptables nettools.IPTablesHelper
-	ipset    nettools.IPSetHelper
-	namer    Namer
+	iptables      nettools.IPTablesHelper
+	ipset         nettools.IPSetHelper
+	namer         Namer
+	allIPs1stHalf *net.IPNet
+	allIPs2ndHalf *net.IPNet
 }
 
 // NewThroughServiceDNATProvider returns new instance of the ThroughServiceDNAT
 func NewThroughServiceDNATProvider(iptables nettools.IPTablesHelper, ipset nettools.IPSetHelper,
 	namer Namer) DNATProvider {
+	_, allIPs1stHalf, _ := net.ParseCIDR("0.0.0.0/1")
+	_, allIPs2ndHalf, _ := net.ParseCIDR("128.0.0.0/1")
 	return &ThroughServiceDNAT{
-		iptables: iptables,
-		ipset:    ipset,
-		namer:    namer,
+		iptables:      iptables,
+		ipset:         ipset,
+		namer:         namer,
+		allIPs1stHalf: allIPs1stHalf,
+		allIPs2ndHalf: allIPs2ndHalf,
 	}
 }
 
@@ -169,6 +175,12 @@ func (p *ThroughServiceDNAT) synchronizeJumpAndIPSet(mapping *v1alpha1.Mapping, 
 			logrusWithMapping(mapping).Errorf("Error parsing allowed source %s: %v", allowedSrc, err)
 			return err
 		}
+		// ipset of type hash:net doesn't allow entry for 0.0.0.0/0. We have to fake it as
+		// 0.0.0.0/1 and 128.0.0.0/1
+		allowedSourceIPSetIPs := []*net.IPNet{srcNet}
+		if strings.Split(srcNet.String(), "/")[1] == "0" {
+			allowedSourceIPSetIPs = []*net.IPNet{p.allIPs1stHalf, p.allIPs2ndHalf}
+		}
 		endpoints := []struct {
 			ports []v1alpha1.MappingPort
 			proto nettools.Protocol
@@ -176,14 +188,16 @@ func (p *ThroughServiceDNAT) synchronizeJumpAndIPSet(mapping *v1alpha1.Mapping, 
 			{tcpPorts, nettools.TCP},
 			{udpPorts, nettools.UDP},
 		}
-		for _, ep := range endpoints {
-			for _, port := range ep.ports {
-				netPort := nettools.NetPort{
-					Net:      *srcNet,
-					Port:     uint16(port.Port),
-					Protocol: ep.proto,
+		for _, subnet := range allowedSourceIPSetIPs {
+			for _, ep := range endpoints {
+				for _, port := range ep.ports {
+					netPort := nettools.NetPort{
+						Net:      *subnet,
+						Port:     uint16(port.Port),
+						Protocol: ep.proto,
+					}
+					netPorts = append(netPorts, netPort)
 				}
-				netPorts = append(netPorts, netPort)
 			}
 		}
 	}

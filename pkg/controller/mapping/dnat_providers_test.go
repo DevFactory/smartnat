@@ -46,8 +46,10 @@ type testCase struct {
 	extIP              string
 	externalIP         net.IP
 	dport, servicePort int32
+	allowedAll         string
+	allowedAllNets     []*net.IPNet
 	allowed            string
-	allowedNet         *net.IPNet
+	allowedNets        []*net.IPNet
 	serviceIP          string
 	meta               v1meta.ObjectMeta
 	mapping            *v1alpha1.Mapping
@@ -61,23 +63,28 @@ func getTestCase() testCase {
 		Name:      "test",
 		Namespace: "test",
 	}
-	allowed := "0.0.0.0/0"
+	allowedAll := "0.0.0.0/0"
+	_, allowedAllNet1, _ := net.ParseCIDR("0.0.0.0/1")
+	_, allowedAllNet2, _ := net.ParseCIDR("128.0.0.0/1")
+	allowed := "10.0.0.0/16"
 	_, allowedNet, _ := net.ParseCIDR(allowed)
 	serviceIP := "172.16.1.1"
 	return testCase{
-		extIP:       extIP,
-		externalIP:  net.ParseIP(extIP),
-		dport:       80,
-		servicePort: 8080,
-		allowed:     allowed,
-		allowedNet:  allowedNet,
-		serviceIP:   serviceIP,
-		meta:        meta,
+		extIP:          extIP,
+		externalIP:     net.ParseIP(extIP),
+		dport:          80,
+		servicePort:    8080,
+		allowedAll:     allowedAll,
+		allowedAllNets: []*net.IPNet{allowedAllNet1, allowedAllNet2},
+		allowed:        allowed,
+		allowedNets:    []*net.IPNet{allowedNet},
+		serviceIP:      serviceIP,
+		meta:           meta,
 		mapping: &v1alpha1.Mapping{
 			ObjectMeta: meta,
 			Spec: v1alpha1.MappingSpec{
 				Addresses:      []string{extIP, "10.20.30.1"},
-				AllowedSources: []string{allowed},
+				AllowedSources: []string{allowedAll},
 				ServiceName:    "test",
 			},
 		},
@@ -104,12 +111,13 @@ func Test_throughServiceDNATProvider_SetupDNAT(t *testing.T) {
 	}
 	iptablesBogusExistingRule := getIptablesDNATRule(c.serviceIP, protoTcp, c.customChain, 1111, c.servicePort, c.meta)
 	tests := []struct {
-		name  string
-		ports []v1alpha1.MappingPort
-		init  func(ipt *ntmocks.IPTablesHelper, ips *ntmocks.IPSetHelper)
+		name      string
+		ports     []v1alpha1.MappingPort
+		allowedSource string
+		init      func(ipt *ntmocks.IPTablesHelper, ips *ntmocks.IPSetHelper)
 	}{
 		{
-			name: "tcp only, no existing rules",
+			name: "tcp only, no existing rules, allow all",
 			ports: []v1alpha1.MappingPort{
 				{
 					Port:        c.dport,
@@ -117,6 +125,7 @@ func Test_throughServiceDNATProvider_SetupDNAT(t *testing.T) {
 					ServicePort: c.servicePort,
 				},
 			},
+			allowedSource: c.allowedAll,
 			init: func(ipt *ntmocks.IPTablesHelper, ips *ntmocks.IPSetHelper) {
 				ipt.
 					On("EnsureChainExists", "nat", c.customChain).Return(nil).
@@ -129,7 +138,12 @@ func Test_throughServiceDNATProvider_SetupDNAT(t *testing.T) {
 				ips.On("EnsureSetExists", c.ipset, "hash:net,port").Return(nil).
 					On("EnsureSetHasOnlyNetPort", c.ipset, []nettools.NetPort{
 						nettools.NetPort{
-							Net:      *c.allowedNet,
+							Net:      *c.allowedAllNets[0],
+							Port:     uint16(c.dport),
+							Protocol: nettools.TCP,
+						},
+						nettools.NetPort{
+							Net:      *c.allowedAllNets[1],
 							Port:     uint16(c.dport),
 							Protocol: nettools.TCP,
 						},
@@ -137,7 +151,7 @@ func Test_throughServiceDNATProvider_SetupDNAT(t *testing.T) {
 			},
 		},
 		{
-			name: "tcp and udp, some existing rules",
+			name: "tcp and udp, some existing rules, allow all",
 			ports: []v1alpha1.MappingPort{
 				{
 					Port:        c.dport,
@@ -150,6 +164,7 @@ func Test_throughServiceDNATProvider_SetupDNAT(t *testing.T) {
 					ServicePort: c.servicePort,
 				},
 			},
+			allowedSource: c.allowedAll,
 			init: func(ipt *ntmocks.IPTablesHelper, ips *ntmocks.IPSetHelper) {
 				ipt.
 					On("EnsureChainExists", "nat", c.customChain).Return(nil).
@@ -166,14 +181,53 @@ func Test_throughServiceDNATProvider_SetupDNAT(t *testing.T) {
 				ips.On("EnsureSetExists", c.ipset, "hash:net,port").Return(nil).
 					On("EnsureSetHasOnlyNetPort", c.ipset, []nettools.NetPort{
 						nettools.NetPort{
-							Net:      *c.allowedNet,
+							Net:      *c.allowedAllNets[0],
 							Port:     uint16(c.dport),
 							Protocol: nettools.TCP,
 						},
 						nettools.NetPort{
-							Net:      *c.allowedNet,
+							Net:      *c.allowedAllNets[0],
 							Port:     uint16(c.dport),
 							Protocol: nettools.UDP,
+						},
+						nettools.NetPort{
+							Net:      *c.allowedAllNets[1],
+							Port:     uint16(c.dport),
+							Protocol: nettools.TCP,
+						},
+						nettools.NetPort{
+							Net:      *c.allowedAllNets[1],
+							Port:     uint16(c.dport),
+							Protocol: nettools.UDP,
+						},
+					}).Return(nil)
+			},
+		},
+		{
+			name: "tcp only, no existing rules, allow subnet",
+			ports: []v1alpha1.MappingPort{
+				{
+					Port:        c.dport,
+					Protocol:    protoTcp,
+					ServicePort: c.servicePort,
+				},
+			},
+			allowedSource: c.allowed,
+			init: func(ipt *ntmocks.IPTablesHelper, ips *ntmocks.IPSetHelper) {
+				ipt.
+					On("EnsureChainExists", "nat", c.customChain).Return(nil).
+					On("EnsureExistsOnlyAppend",
+						getIptablesProtoJumpRule(c.extIP, c.customChain, c.ipset, c.meta)).Return(nil).
+					On("EnsureExistsInsert", iptablesMarkRule).Return(nil).
+					On("LoadRules", natTableName, c.customChain).Return([]*nt.IPTablesRuleArgs{}, nil).
+					On("EnsureExistsAppend",
+						getIptablesDNATRule(c.serviceIP, protoTcp, c.customChain, c.dport, c.servicePort, c.meta)).Return(nil)
+				ips.On("EnsureSetExists", c.ipset, "hash:net,port").Return(nil).
+					On("EnsureSetHasOnlyNetPort", c.ipset, []nettools.NetPort{
+						nettools.NetPort{
+							Net:      *c.allowedNets[0],
+							Port:     uint16(c.dport),
+							Protocol: nettools.TCP,
 						},
 					}).Return(nil)
 			},
@@ -182,6 +236,7 @@ func Test_throughServiceDNATProvider_SetupDNAT(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c.mapping.Spec.Ports = tt.ports
+			c.mapping.Spec.AllowedSources = []string{tt.allowedSource}
 			iptables := &ntmocks.IPTablesHelper{}
 			ipset := &ntmocks.IPSetHelper{}
 			tt.init(iptables, ipset)
